@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Выработка внедрения — Дашборд</title>
+<style>
+  :root {
+    --bg: #0f1219; --card: #1a1d28; --border: #2a2d3a;
+    --text: #e8eaed; --text2: #8a8d9a;
+    --green: #27ae60; --green-bg: rgba(39,174,96,.15);
+    --yellow: #f39c12; --yellow-bg: rgba(243,156,18,.15);
+    --red: #e74c3c; --red-bg: rgba(231,76,60,.15);
+    --accent: #5b8def;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 20px; min-height: 100vh; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .header-info { font-size: 13px; color: var(--text2); }
+  .month-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  .month-btn { padding: 6px 14px; border: 1px solid var(--border); background: var(--card); border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text2); transition: all .15s; }
+  .month-btn:hover { border-color: var(--accent); color: var(--text); }
+  .month-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .month-btn.has-data { font-weight: 600; }
+  .month-btn:not(.has-data) { opacity: .35; }
+
+  /* ===== СВЕТОФОР ===== */
+  @keyframes glow-red { 0%,100% { box-shadow: 0 0 30px rgba(231,76,60,.3), inset 0 0 30px rgba(231,76,60,.1); } 50% { box-shadow: 0 0 60px rgba(231,76,60,.6), inset 0 0 50px rgba(231,76,60,.15); } }
+  @keyframes glow-yellow { 0%,100% { box-shadow: 0 0 30px rgba(243,156,18,.3), inset 0 0 30px rgba(243,156,18,.1); } 50% { box-shadow: 0 0 60px rgba(243,156,18,.6), inset 0 0 50px rgba(243,156,18,.15); } }
+  @keyframes glow-green { 0%,100% { box-shadow: 0 0 30px rgba(39,174,96,.3), inset 0 0 30px rgba(39,174,96,.1); } 50% { box-shadow: 0 0 60px rgba(39,174,96,.6), inset 0 0 50px rgba(39,174,96,.15); } }
+  @keyframes pop-in { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+
+  .traffic-card { background: linear-gradient(135deg, #1a1d28 0%, #222736 100%); border-radius: 16px; margin-bottom: 16px; overflow: hidden; border: 1px solid var(--border); }
+  .traffic-header { padding: 14px 20px; font-size: 13px; color: var(--text2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .tl-summary { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .tl-summary-item { flex: 1; padding: 10px 20px; display: flex; align-items: center; gap: 14px; }
+  .tl-summary-item + .tl-summary-item { border-left: 1px solid var(--border); }
+  .tl-summary-item .summ-label { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; min-width: 40px; white-space: nowrap; }
+  .tl-summary-item .summ-stats { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .tl-summary-item .summ-stat { display: flex; align-items: baseline; gap: 4px; font-size: 13px; }
+  .tl-summary-item .summ-stat .val { font-weight: 700; font-size: 15px; }
+  .tl-summary-item .summ-stat .lbl { font-size: 11px; color: var(--text2); }
+
+  .traffic-body { position: relative; width: 100%; max-width: 1165px; margin: 0 auto; }
+  .traffic-body img { width: 100%; height: auto; display: block; border-radius: 0 0 16px 16px; }
+
+  .tl-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; }
+  .tl-zone { flex: 1; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 6px; padding: 12px; position: relative; }
+  .emp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px 5px 12px; border-radius: 20px; font-weight: 600; cursor: pointer; transition: all .25s cubic-bezier(.4,0,.2,1); border: none; color: #fff; animation: pop-in .4s ease-out both; backdrop-filter: blur(4px); letter-spacing: .2px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .emp-chip.size-xl { font-size: 18px; padding: 8px 16px 8px 20px; }
+  .emp-chip.size-xl .pct-badge { font-size: 14px; padding: 2px 10px; }
+  .emp-chip.size-l { font-size: 15px; padding: 6px 12px 6px 16px; }
+  .emp-chip.size-l .pct-badge { font-size: 12px; }
+  .emp-chip.size-m { font-size: 12px; }
+  .emp-chip.size-s { font-size: 10px; padding: 3px 6px 3px 8px; gap: 3px; }
+  .emp-chip.size-s .pct-badge { font-size: 9px; min-width: 24px; padding: 0 4px; }
+  .emp-chip:hover { transform: scale(1.06); filter: brightness(1.15); z-index: 2; }
+  .emp-chip:active { transform: scale(.94); }
+  .emp-chip.red-chip { background: rgba(180,30,30,.65); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  .emp-chip.yellow-chip { background: rgba(200,140,0,.65); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  .emp-chip.green-chip { background: rgba(20,130,60,.65); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  .emp-chip .pct-badge { display: inline-flex; align-items: center; justify-content: center; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: 700; background: rgba(0,0,0,.25); margin-left: 2px; min-width: 30px; }
+  .emp-chip.empty { opacity: .4; cursor: default; pointer-events: none; font-size: 22px; font-weight: 300; background: none !important; text-shadow: none; color: var(--text2); }
+
+  /* ===== ТАБЛИЦА ===== */
+  .card { background: var(--card); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+  .card-header { padding: 14px 20px; font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .card-header:hover { background: rgba(255,255,255,.03); }
+  .toggle-icon { font-size: 12px; transition: transform .2s; color: var(--text2); }
+  .toggle-icon.collapsed { transform: rotate(-90deg); }
+  .table-wrap { overflow-x: auto; }
+  .table-collapse { overflow: hidden; transition: max-height .3s ease; }
+  .table-collapse.closed { max-height: 0 !important; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { background: rgba(255,255,255,.03); font-weight: 600; font-size: 12px; color: var(--text2); }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .light { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+  .light.green { background: var(--green); }
+  .light.yellow { background: var(--yellow); }
+  .light.red { background: var(--red); }
+  .progress-bar { display: inline-block; width: 60px; height: 5px; background: rgba(255,255,255,.1); border-radius: 3px; vertical-align: middle; margin-right: 6px; overflow: hidden; }
+  .progress-bar .fill { height: 100%; border-radius: 3px; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .badge.blue { background: rgba(91,141,239,.15); color: #5b8def; }
+  .badge.green-bg { background: rgba(39,174,96,.15); color: #27ae60; }
+  .expand-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+  .expand-btn:hover { background: rgba(91,141,239,.1); }
+  .detail-row { display: none; }
+  .detail-row.show { display: table-row; }
+  .detail-cell { padding: 0 !important; }
+  .detail-table { width: 100%; background: rgba(0,0,0,.15); font-size: 12px; }
+  .detail-table td { padding: 5px 12px; border-bottom: 1px solid rgba(255,255,255,.05); }
+  .detail-table .client-col { font-weight: 500; }
+  .summary-row { font-weight: 600; background: rgba(255,255,255,.04) !important; }
+  .summary-row td { border-bottom: 2px solid var(--border); }
+  .loader { text-align: center; padding: 40px; color: var(--text2); }
+  .loader .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { text-align: center; padding: 40px; color: var(--red); }
+
+  /* ===== МОДАЛКА ===== */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; justify-content: center; align-items: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; max-width: 520px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 24px; position: relative; }
+  .modal-close { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; }
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .modal-stats { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .modal-stat { flex: 1; min-width: 80px; background: rgba(255,255,255,.04); border-radius: 8px; padding: 10px; text-align: center; }
+  .modal-stat .val { font-size: 20px; font-weight: 700; }
+  .modal-stat .lbl { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .modal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .modal-table th { background: rgba(255,255,255,.04); padding: 6px 10px; font-size: 11px; color: var(--text2); text-align: left; }
+  .modal-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .modal-table tr:last-child td { border-bottom: none; }
+
+  .add-month-form { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .add-month-form input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; background: rgba(255,255,255,.05); color: var(--text); }
+  .add-month-form button { padding: 5px 12px; background: var(--accent); color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .tl-summary-item { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .header h1 { font-size: 18px; }
+    th, td { padding: 6px 8px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Выработка внедрения</h1>
+    <div class="header-info" id="infoText">Загрузка...</div>
+  </div>
+  <div class="month-nav" id="monthNav"></div>
+</div>
+
+<!-- Светофор -->
+<div class="traffic-card" id="trafficCard">
+  <div class="traffic-header">
+    <span>🚦 Светофор</span>
+    <span style="display:flex;gap:14px;font-size:11px">
+      <span style="color:#e74c3c">● &lt;70%</span>
+      <span style="color:#f39c12">● 70–89%</span>
+      <span style="color:#27ae60">● ≥90%</span>
+    </span>
+  </div>
+  <div class="tl-summary" id="tlSummary">
+    <div class="tl-summary-item" id="summOV1">
+      <span class="summ-label" style="color:var(--accent)">ОВ 1</span>
+      <div class="summ-stats" id="summOV1Stats">—</div>
+    </div>
+    <div class="tl-summary-item" id="summOV2">
+      <span class="summ-label" style="color:#9b59b6">ОВ 2</span>
+      <div class="summ-stats" id="summOV2Stats">—</div>
+    </div>
+  </div>
+  <div class="traffic-body">
+    <img src="светофор.jpg" alt="Светофор" draggable="false">
+    <div class="tl-overlay">
+      <div class="tl-zone" id="zoneRedEmp"></div>
+      <div class="tl-zone" id="zoneYellowEmp"></div>
+      <div class="tl-zone" id="zoneGreenEmp"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Таблица детализации -->
+<div class="card" id="tableCard">
+  <div class="card-header" id="tableToggle">
+    <span>Детализация по сотрудникам</span>
+    <span class="toggle-icon" id="toggleIcon">▼</span>
+  </div>
+  <div class="table-collapse" id="tableCollapse">
+    <div id="tableContent">
+      <div class="loader"><div class="spinner"></div><div>Загрузка...</div></div>
+    </div>
+  </div>
+  <div class="add-month-form" id="addMonthForm">
+    <span style="font-size:12px;color:var(--text2)">+ месяц:</span>
+    <input type="text" id="newMonthName" placeholder="Название" size="10">
+    <input type="number" id="newMonthGid" placeholder="GID" size="8">
+    <button onclick="addMonth()">+</button>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2 id="modalName">—</h2>
+    <div class="modal-stats" id="modalStats"></div>
+    <h3 style="font-size:14px;margin-bottom:8px;color:var(--text2)">Предпродажа</h3>
+    <div id="modalPresale"><span style="color:var(--text2);font-size:13px">Нет активных предпродаж</span></div>
+  </div>
+</div>
+
+<script>
+const SHEETS = {
+  presale: { id: '1RYO95DbkSbDnYFaEROnKevr7LWVdvJySFc730aJ6qpc', gid: 1955579473 },
+  planfact: { id: '1Ptbxo9e9rVow0puSqbOOjVmHGU6xewHtvJMdD6VPjDI', months: {
+      'Апрель': 1568330009,
+      'Май': 179725658,
+      'Июнь': 1268666478,
+      'Июль': 254263666,
+      'Август': 384793076,
+      'Сентябрь': 561995413,
+      'Октябрь': 876820531,
+      'Ноябрь': 252087631,
+      'Декабрь': 1402247839
+    } }
+};
+const ACTIVE_STATUSES = ['Согласована', 'В работе'];
+
+function saveConfig() { try { localStorage.setItem('presale_months', JSON.stringify(SHEETS.planfact.months)); } catch(e) {} }
+function loadConfig() { try { const s = localStorage.getItem('presale_months'); if (s) { const p = JSON.parse(s); for (const k in p) if (!SHEETS.planfact.months[k]) SHEETS.planfact.months[k] = p[k]; } } catch(e) {} }
+loadConfig();
+
+let gvizQueue = [];
+function loadSheetJSONP(id, gid) {
+  return new Promise((res, rej) => { gvizQueue.push({ resolve: res, reject: rej, gid, id }); if (gvizQueue.length === 1) processQueue(); });
+}
+function processQueue() {
+  if (!gvizQueue.length) return;
+  const item = gvizQueue[0];
+  const timeout = setTimeout(() => { gvizQueue.shift(); item.reject(new Error('Таймаут')); processQueue(); }, 15000);
+  window.google = window.google || {};
+  window.google.visualization = window.google.visualization || {};
+  window.google.visualization.Query = window.google.visualization.Query || {};
+  window.google.visualization.Query.setResponse = function(resp) {
+    clearTimeout(timeout);
+    const done = gvizQueue.shift();
+    if (resp.status !== 'ok') { done.reject(new Error(resp.status)); } else {
+      const rows = [];
+      for (const r of resp.table.rows) {
+        const row = [];
+        for (let ci = 0; ci < resp.table.cols.length; ci++) {
+          const cell = r.c && r.c[ci] || {};
+          row.push(cell.v !== undefined && cell.v !== null ? String(cell.v) : '');
+        }
+        while (row.length && row[row.length-1] === '') row.pop();
+        rows.push(row);
+      }
+      done.resolve(rows);
+    }
+    processQueue();
+  };
+  const s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + item.id + '/gviz/tq?tqx=out:json&gid=' + item.gid;
+  s.onerror = function() { clearTimeout(timeout); gvizQueue.shift(); item.reject(new Error('Ошибка скрипта')); processQueue(); };
+  document.head.appendChild(s);
+}
+
+function parsePresale(rows, targetMonth) {
+  const emp = {};
+  for (const row of rows) {
+    if (!row || row.length < 4) continue;
+    const name = String(row[0]||'').trim();
+    const client = String(row[1]||'').trim();
+    const hours = parseFloat(String(row[3]||'').replace(',','.')) || 0;
+    const status = String(row[4]||'').trim();
+    const month = String(row[5]||'').trim();
+    if (!name || !client || name === client) continue;
+    if (client.toLowerCase() === 'клиент' || name.toLowerCase() === 'итого') continue;
+    const tm = (targetMonth||'').toLowerCase().substring(0,3);
+    if (tm && !month.toLowerCase().includes(tm)) continue;
+    if (!emp[name]) emp[name] = [];
+    emp[name].push({ client, hours, status, month });
+  }
+  return emp;
+}
+
+const COL_PLAN = 70, COL_FACT = 71;
+function parsePlanFact(rows) {
+  const emp = {};
+  let dept = 'ОВ 1 Астана';
+  for (const row of rows) {
+    if (!row || row.length < 3) continue;
+    const c1 = String(row[1]||'').trim().toLowerCase();
+    if (c1.includes('итого')) { if (c1.includes('ов 1')) dept = 'ОВ 2 Астана'; continue; }
+    const num = parseInt(row[0]);
+    if (isNaN(num) || num < 1) continue;
+    const name = String(row[1]||'').trim();
+    if (!name || name === 'фио') continue;
+    const plan = parseFloat(String(row[COL_PLAN]||'').replace(',','.'));
+    const fact = parseFloat(String(row[COL_FACT]||'').replace(',','.'));
+    if (!isNaN(plan) && !isNaN(fact)) emp[name] = { planTotal: plan, factTotal: fact, dept };
+  }
+  return emp;
+}
+
+function workDaysKZ(year, month) {
+  const h = { '1-1':1,'1-2':1,'1-7':1,'3-8':1,'3-21':1,'3-22':1,'3-23':1,'5-1':1,'5-7':1,'5-9':1,'7-6':1,'8-30':1,'10-25':1,'12-16':1,'12-17':1 };
+  let total = 0, passed = 0;
+  const dim = new Date(year, month+1, 0).getDate();
+  const today = Math.min(new Date().getDate(), dim);
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(year, month, d);
+    const wd = dt.getDay();
+    const isWork = wd !== 0 && wd !== 6 && !h[(month+1)+'-'+d];
+    if (isWork) total++;
+    if (isWork && d <= today) passed++;
+  }
+  return { total, passed, expected: Math.min(passed/total*100, 100) };
+}
+
+let currentMonth = 'Июль';
+let cachedPresale = {}, cachedPlanfact = {};
+
+async function loadData(month) {
+  currentMonth = month;
+  const infoText = document.getElementById('infoText');
+  infoText.textContent = 'Загрузка ' + month + '...';
+  try {
+    const [pr, pf] = await Promise.all([
+      loadSheetJSONP(SHEETS.presale.id, SHEETS.presale.gid),
+      loadSheetJSONP(SHEETS.planfact.id, SHEETS.planfact.months[month])
+    ]);
+    cachedPresale = parsePresale(pr, month);
+    cachedPlanfact = parsePlanFact(pf);
+    renderAll(month);
+  } catch(e) {
+    document.getElementById('trafficCard').innerHTML = '<div class="error">Ошибка: ' + e.message + '</div>';
+    infoText.textContent = 'Ошибка';
+  }
+}
+
+function renderAll(month) {
+  const infoText = document.getElementById('infoText');
+  const names = Object.keys(cachedPlanfact).sort();
+  const wd = workDaysKZ(new Date().getFullYear(), new Date().getMonth());
+  const norm = wd.expected;
+  let rows = [];
+  let deptTotals = {};
+
+  for (const name of names) {
+    const pf = cachedPlanfact[name];
+    if (!pf || !pf.planTotal) continue;
+    const plan = pf.planTotal, fact = pf.factTotal;
+    const pct = plan > 0 ? fact/plan*100 : 0;
+    const paceColor = pct >= norm ? 'green' : pct >= norm*0.8 ? 'yellow' : 'red';
+
+    let psHours = 0, psItems = [];
+    const nn = name.toLowerCase().replace(/\s+/g,' ');
+    for (const [ek, items] of Object.entries(cachedPresale)) {
+      const en = ek.toLowerCase().replace(/\s+/g,' ');
+      if (nn.includes(en) || en.includes(nn)) {
+        for (const it of items) {
+          if (!ACTIVE_STATUSES.includes(it.status)) continue;
+          psHours += it.hours; psItems.push(it);
+        }
+      }
+    }
+
+    const forecast = plan > 0 ? (fact+psHours)/plan*100 : 0;
+    const fColor = forecast >= 90 ? 'green' : forecast >= 70 ? 'yellow' : 'red';
+    const fLabel = forecast >= 90 ? 'Выполним' : forecast >= 70 ? 'Риск' : 'Провал';
+    const fBar = forecast >= 90 ? 'var(--green)' : forecast >= 70 ? 'var(--yellow)' : 'var(--red)';
+
+    rows.push({ name, plan, fact, pct, paceColor, psHours, psItems, forecast, fColor, fLabel, fBar, dept: pf.dept });
+
+    const d = pf.dept === 'ОВ 1 Астана' ? 'ov1' : pf.dept === 'ОВ 2 Астана' ? 'ov2' : null;
+    if (d) {
+      if (!deptTotals[d]) deptTotals[d] = { plan:0, fact:0 };
+      deptTotals[d].plan += plan;
+      deptTotals[d].fact += fact;
+    }
+  }
+
+  renderTrafficLight(rows);
+  renderSummary(deptTotals, norm);
+  renderTable(rows, month, norm, infoText);
+}
+
+function renderTrafficLight(rows) {
+  const zones = { red: [], yellow: [], green: [] };
+  for (const r of rows) zones[r.paceColor].push(r);
+
+  for (const color of ['red','yellow','green']) {
+    const key = color.charAt(0).toUpperCase() + color.slice(1);
+    const el = document.getElementById('zone' + key + 'Emp');
+    if (!el) continue;
+    const items = zones[color];
+    const count = items.length;
+
+    // Авто-масштаб: чем больше людей, тем мельче шрифт
+    let sizeClass = 'size-m';
+    if (count <= 2) sizeClass = 'size-xl';
+    else if (count <= 4) sizeClass = 'size-l';
+    else if (count <= 7) sizeClass = 'size-m';
+    else sizeClass = 'size-s';
+
+    if (count === 0) {
+      el.innerHTML = '<span class="emp-chip empty">—</span>';
+      continue;
+    }
+    el.innerHTML = items.map((r, i) =>
+      `<button class="emp-chip ${color}-chip ${sizeClass}" onclick="showEmp('${r.name.replace(/'/g,"\\'")}')" style="animation-delay:${i*0.06}s">
+        ${r.name}
+        <span class="pct-badge">${r.pct.toFixed(0)}%</span>
+      </button>`
+    ).join('');
+  }
+}
+
+function renderSummary(deptTotals, norm) {
+  for (const key of ['ov1','ov2']) {
+    const el = document.getElementById('summ' + key.toUpperCase() + 'Stats');
+    if (!el) continue;
+    const d = deptTotals[key];
+    if (!d || !d.plan) { el.innerHTML = '<span style="color:var(--text2);font-size:12px">нет данных</span>'; continue; }
+    const pct = d.fact / d.plan * 100;
+    const color = pct >= norm ? 'var(--green)' : pct >= norm*0.8 ? 'var(--yellow)' : 'var(--red)';
+    el.innerHTML = `
+      <div class="summ-stat"><span class="val">${d.plan.toFixed(0)}</span><span class="lbl">план</span></div>
+      <div class="summ-stat"><span class="val">${d.fact.toFixed(0)}</span><span class="lbl">факт</span></div>
+      <div class="summ-stat"><span class="val" style="color:${color}">${pct.toFixed(1)}%</span><span class="lbl">вып.</span></div>
+    `;
+  }
+}
+
+function renderTable(rows, month, norm, infoText) {
+  const content = document.getElementById('tableContent');
+  if (!rows.length) { content.innerHTML = '<div class="error">Нет данных</div>'; return; }
+
+  const deps = {};
+  for (const r of rows) { const d = r.dept || ''; if (!deps[d]) deps[d] = []; deps[d].push(r); }
+  const depsOrder = ['ОВ 1 Астана','ОВ 2 Астана'].filter(d => deps[d]).concat(Object.keys(deps).filter(d => !['ОВ 1 Астана','ОВ 2 Астана'].includes(d)));
+
+  let idx = 0, totalPlan=0, totalFact=0, totalPresale=0;
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th>№</th><th>ФИО</th><th class="num">План, ч</th><th class="num">Факт, ч</th>
+    <th class="num">% вып.<br><span style="font-weight:400;font-size:10px;color:var(--text2)">норма ${norm.toFixed(0)}%</span></th>
+    <th class="num">Предпр., ч</th><th class="num">Прогноз, %</th><th>Статус</th><th></th>
+  </tr></thead><tbody>`;
+
+  for (const d of depsOrder) {
+    const emps = deps[d]; let dPlan=0, dFact=0, dPresale=0;
+    const dShort = d.includes('1') ? 'ОВ 1' : d.includes('2') ? 'ОВ 2' : d;
+    html += `<tr style="background:rgba(255,255,255,.05);font-weight:600"><td colspan="9" style="padding:6px 12px;font-size:12px;text-transform:uppercase;letter-spacing:.5px">${d}</td></tr>`;
+    for (const r of emps) {
+      idx++; dPlan+=r.plan; dFact+=r.fact; dPresale+=r.psHours;
+      totalPlan+=r.plan; totalFact+=r.fact; totalPresale+=r.psHours;
+      const bar = r.forecast >= 90 ? 'var(--green)' : r.forecast >= 70 ? 'var(--yellow)' : 'var(--red)';
+      html += `<tr>
+        <td>${idx}</td>
+        <td><strong>${r.name}</strong></td>
+        <td class="num">${r.plan.toFixed(1)}</td>
+        <td class="num">${r.fact.toFixed(1)}</td>
+        <td class="num" style="color:${r.paceColor === 'green' ? 'var(--green)' : r.paceColor === 'yellow' ? 'var(--yellow)' : 'var(--red)'};font-weight:600">${r.pct.toFixed(1)}%<span style="font-weight:400;font-size:10px;color:var(--text2);display:block">норма ${norm.toFixed(0)}%</span></td>
+        <td class="num">${r.psHours > 0 ? r.psHours.toFixed(1) : '—'}</td>
+        <td class="num"><div class="progress-bar"><div class="fill" style="width:${Math.min(r.forecast,100)}%;background:${bar}"></div></div>${r.forecast.toFixed(1)}%</td>
+        <td><span class="light ${r.fColor}"></span>${r.fLabel}</td>
+        <td>${r.psItems.length > 0 ? `<button class="expand-btn" onclick="toggleDetail('d${idx}')">${r.psItems.length}</button>` : ''}</td>
+      </tr>`;
+      if (r.psItems.length) {
+        html += `<tr class="detail-row" id="d${idx}"><td colspan="9" class="detail-cell"><table class="detail-table"><tr><th>Клиент</th><th class="num">Часы</th><th>Статус</th><th>Месяц</th></tr>`;
+        for (const it of r.psItems) {
+          const bc = it.status === 'Согласована' ? 'green-bg' : 'blue';
+          html += `<tr><td class="client-col">${it.client}</td><td class="num">${it.hours.toFixed(1)}</td><td><span class="badge ${bc}">${it.status}</span></td><td>${it.month||'—'}</td></tr>`;
+        }
+        html += `</table></td></tr>`;
+      }
+    }
+    const dPct = dPlan > 0 ? dFact/dPlan*100 : 0;
+    const dForecast = dPlan > 0 ? (dFact+dPresale)/dPlan*100 : 0;
+    const dColor = dForecast >= 90 ? 'green' : dForecast >= 70 ? 'yellow' : 'red';
+    const dBar = dForecast >= 90 ? 'var(--green)' : dForecast >= 70 ? 'var(--yellow)' : 'var(--red)';
+    html += `<tr style="background:rgba(255,255,255,.04);font-weight:500">
+      <td></td><td style="color:var(--text2);font-size:12px">${dShort}</td>
+      <td class="num">${dPlan.toFixed(1)}</td><td class="num">${dFact.toFixed(1)}</td>
+      <td class="num" style="color:${dPct >= norm ? 'var(--green)' : dPct >= norm*0.8 ? 'var(--yellow)' : 'var(--red)'}">${dPct.toFixed(1)}%</td>
+      <td class="num">${dPresale > 0 ? dPresale.toFixed(1) : '—'}</td>
+      <td class="num"><div class="progress-bar"><div class="fill" style="width:${Math.min(dForecast,100)}%;background:${dBar}"></div></div>${dForecast.toFixed(1)}%</td>
+      <td><span class="light ${dColor}"></span>${dForecast >= 90 ? 'Выполним' : dForecast >= 70 ? 'Риск' : 'Провал'}</td><td></td>
+    </tr>`;
+  }
+
+  const tPct = totalPlan > 0 ? totalFact/totalPlan*100 : 0;
+  const tForecast = totalPlan > 0 ? (totalFact+totalPresale)/totalPlan*100 : 0;
+  const tFinal = Math.min(tForecast, 100);
+  const tColor = tForecast >= 90 ? 'green' : tForecast >= 70 ? 'yellow' : 'red';
+  const tBar = tForecast >= 90 ? 'var(--green)' : tForecast >= 70 ? 'var(--yellow)' : 'var(--red)';
+  html += `<tr class="summary-row">
+    <td></td><td><strong>ИТОГО</strong></td>
+    <td class="num"><strong>${totalPlan.toFixed(1)}</strong></td><td class="num"><strong>${totalFact.toFixed(1)}</strong></td>
+    <td class="num" style="color:${tPct >= norm ? 'var(--green)' : tPct >= norm*0.8 ? 'var(--yellow)' : 'var(--red)'}"><strong>${tPct.toFixed(1)}%</strong></td>
+    <td class="num"><strong>${totalPresale > 0 ? totalPresale.toFixed(1) : '—'}</strong></td>
+    <td class="num"><div class="progress-bar"><div class="fill" style="width:${tFinal}%;background:${tBar}"></div></div><strong>${tForecast.toFixed(1)}%</strong></td>
+    <td><span class="light ${tColor}"></span>${tForecast >= 90 ? 'Выполним' : tForecast >= 70 ? 'Риск' : 'Провал'}</td><td></td>
+  </tr>`;
+  html += '</tbody></table></div>';
+  content.innerHTML = html;
+
+  const presaleCount = Object.values(cachedPresale).flat().filter(i => ACTIVE_STATUSES.includes(i.status)).length;
+  infoText.innerHTML = `${month} · ${rows.length} сотрудников · ${presaleCount} активных предпродаж · норма ${norm.toFixed(0)}%`;
+}
+
+function toggleDetail(id) { document.getElementById(id)?.classList.toggle('show'); }
+
+function showEmp(name) {
+  const r = getAllRows().find(x => x.name === name);
+  if (!r) return;
+  document.getElementById('modalName').textContent = name;
+  document.getElementById('modalStats').innerHTML = `
+    <div class="modal-stat"><div class="val" style="color:var(--accent)">${r.plan.toFixed(0)}</div><div class="lbl">План, ч</div></div>
+    <div class="modal-stat"><div class="val" style="color:${r.pct >= 70 ? 'var(--green)' : 'var(--red)'}">${r.fact.toFixed(0)}</div><div class="lbl">Факт, ч</div></div>
+    <div class="modal-stat"><div class="val" style="color:${r.pct >= norm() ? 'var(--green)' : r.pct >= norm()*0.8 ? 'var(--yellow)' : 'var(--red)'}">${r.pct.toFixed(1)}%</div><div class="lbl">% выполнения</div></div>
+    <div class="modal-stat"><div class="val" style="color:${r.forecast >= 90 ? 'var(--green)' : r.forecast >= 70 ? 'var(--yellow)' : 'var(--red)'}">${r.forecast.toFixed(1)}%</div><div class="lbl">Прогноз</div></div>`;
+  if (r.psItems.length) {
+    let mh = '<table class="modal-table"><tr><th>Клиент</th><th class="num">Часы</th><th>Статус</th><th>Месяц</th></tr>';
+    for (const it of r.psItems) {
+      const bc = it.status === 'Согласована' ? 'green-bg' : 'blue';
+      mh += `<tr><td>${it.client}</td><td class="num">${it.hours.toFixed(1)}</td><td><span class="badge ${bc}">${it.status}</span></td><td>${it.month||'—'}</td></tr>`;
+    }
+    mh += '</table>';
+    document.getElementById('modalPresale').innerHTML = mh;
+  } else {
+    document.getElementById('modalPresale').innerHTML = '<span style="color:var(--text2);font-size:13px">Нет активных предпродаж</span>';
+  }
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+function norm() { return workDaysKZ(new Date().getFullYear(), new Date().getMonth()).expected; }
+
+function getAllRows() {
+  const names = Object.keys(cachedPlanfact).sort();
+  const wd = workDaysKZ(new Date().getFullYear(), new Date().getMonth());
+  const rows = [];
+  for (const name of names) {
+    const pf = cachedPlanfact[name];
+    if (!pf || !pf.planTotal) continue;
+    const plan = pf.planTotal, fact = pf.factTotal;
+    const pct = plan > 0 ? fact/plan*100 : 0;
+    const paceColor = pct >= wd.expected ? 'green' : pct >= wd.expected*0.8 ? 'yellow' : 'red';
+    let psHours = 0, psItems = [];
+    const nn = name.toLowerCase().replace(/\s+/g,' ');
+    for (const [ek, items] of Object.entries(cachedPresale)) {
+      const en = ek.toLowerCase().replace(/\s+/g,' ');
+      if (nn.includes(en) || en.includes(nn)) {
+        for (const it of items) { if (ACTIVE_STATUSES.includes(it.status)) { psHours += it.hours; psItems.push(it); } }
+      }
+    }
+    const forecast = plan > 0 ? (fact+psHours)/plan*100 : 0;
+    rows.push({ name, plan, fact, pct, paceColor, psHours, psItems, forecast, dept: pf.dept });
+  }
+  return rows;
+}
+
+const ALL_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function buildNav() {
+  const nav = document.getElementById('monthNav');
+  const curName = ALL_MONTHS[new Date().getMonth()];
+  for (const m of ALL_MONTHS) {
+    const b = document.createElement('button');
+    const has = !!SHEETS.planfact.months[m];
+    b.className = 'month-btn' + (m === curName ? ' active' : '') + (has ? ' has-data' : '');
+    b.textContent = m;
+    b.onclick = () => {
+      if (!SHEETS.planfact.months[m]) {
+        document.getElementById('tableContent').innerHTML = '<div class="error">Нет данных. Добавьте GID в форму ниже.</div>';
+        return;
+      }
+      document.querySelectorAll('.month-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      loadData(m);
+    };
+    if (!has) b.style.opacity = '.4';
+    nav.appendChild(b);
+  }
+  loadData(curName);
+}
+
+function addMonth() {
+  const n = document.getElementById('newMonthName').value.trim();
+  const g = parseInt(document.getElementById('newMonthGid').value);
+  if (!n || isNaN(g)) return;
+  SHEETS.planfact.months[n] = g;
+  saveConfig();
+  const btn = document.querySelectorAll('.month-btn')[ALL_MONTHS.indexOf(n)];
+  if (btn) { btn.style.opacity='1'; btn.classList.add('has-data'); btn.click(); }
+  document.getElementById('newMonthName').value = '';
+  document.getElementById('newMonthGid').value = '';
+}
+
+document.getElementById('modalOverlay').onclick = function(e) { if (e.target === this) closeModal(); };
+document.getElementById('tableToggle').onclick = function() {
+  document.getElementById('tableCollapse').classList.toggle('closed');
+  document.getElementById('toggleIcon').classList.toggle('collapsed');
+};
+document.addEventListener('DOMContentLoaded', buildNav);
+</script>
+</body>
+</html>
