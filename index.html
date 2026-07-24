@@ -594,7 +594,14 @@ document.getElementById('tableToggle').onclick = function() {
   document.getElementById('tableCollapse').classList.toggle('closed');
   document.getElementById('toggleIcon').classList.toggle('collapsed');
 };
-document.addEventListener('DOMContentLoaded', buildNav);
+document.addEventListener('DOMContentLoaded', function() {
+  buildNav();
+  // Автообновление раз в час
+  setInterval(function() {
+    var m = document.querySelector('.month-btn.active');
+    if (m) loadData(m.textContent);
+  }, 3600000);
+});
 </script>
 </body>
 </html>
