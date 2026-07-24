@@ -556,7 +556,11 @@ function getAllRows() {
 const ALL_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 function buildNav() {
   const nav = document.getElementById('monthNav');
-  const curName = ALL_MONTHS[new Date().getMonth()];
+  const now = new Date();
+  const day = now.getDate();
+  let monthIdx = now.getMonth();
+  if (day === 1) monthIdx = monthIdx === 0 ? 11 : monthIdx - 1; // 1-го числа показываем прошлый месяц
+  const curName = ALL_MONTHS[monthIdx];
   for (const m of ALL_MONTHS) {
     const b = document.createElement('button');
     const has = !!SHEETS.planfact.months[m];
